@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	core "github.com/diphantxm/ozon-api-client"
+	core "github.com/bbq-yaozi/ozon-api-client"
 )
 
 type testData struct {
