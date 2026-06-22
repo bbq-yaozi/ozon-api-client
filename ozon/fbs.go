@@ -198,6 +198,9 @@ type FBSPosting struct {
 
 	// List of products with additional characteristics
 	Optional FBSPostingOptional `json:"optional"`
+
+	// Product Weight
+	VolumeWeight float64 `json:"volume_weight"`
 }
 
 type FBSPostingOptional struct {
@@ -390,8 +393,8 @@ type PostingProduct struct {
 	// Currency of your prices. It matches the one set in the personal account settings
 	CurrencyCode string `json:"currency_code"`
 
-	// Product price
-	Price string `json:"price"`
+	// Product price (V4 returns object: {amount, currency})
+	Price PostingProductPrice `json:"price"`
 
 	// Product quantity in the shipment
 	Quantity int32 `json:"quantity"`
@@ -401,6 +404,12 @@ type PostingProduct struct {
 
 	// Product traceability attribute
 	IsBLRTraceable bool `json:"is_blr_traceable"`
+}
+
+// PostingProductPrice V4 API 价格对象
+type PostingProductPrice struct {
+	Amount   string `json:"amount"`
+	Currency string `json:"currency"`
 }
 
 type FBSCustomer struct {
@@ -675,6 +684,126 @@ func (c FBS) GetFBSShipmentsList(ctx context.Context, params *GetFBSShipmentsLis
 	url := "/v3/posting/fbs/list"
 
 	resp := &GetFBSShipmentsListResponse{}
+
+	response, err := c.client.Request(ctx, http.MethodPost, url, params, resp, nil)
+	if err != nil {
+		return nil, err
+	}
+	response.CopyCommonResponse(&resp.CommonResponse)
+
+	return resp, nil
+}
+
+type GetFBSShipmentsListV4Params struct {
+	// Sorting direction
+	Direction Order `json:"dir,omitempty"`
+
+	// Filter
+	Filter GetFBSShipmentsListV4Filter `json:"filter"`
+
+	// Number of shipments in the response:
+	//   - maximum is 50,
+	//   - minimum is 1.
+	Limit int64 `json:"limit"`
+
+	// Cursor for pagination (V4 uses cursor-based pagination)
+	Cursor string `json:"cursor,omitempty"`
+
+	// Additional fields that should be added to the response
+	With *GetFBSShipmentsListV4With `json:"with,omitempty"`
+}
+
+type GetFBSShipmentsListV4Filter struct {
+	// Delivery method identifier
+	DeliveryMethodId []int64 `json:"delivery_method_id,omitempty"`
+
+	// Filter for shipments delivered from partner warehouse (FBP)
+	//
+	// Default value is all.
+	//
+	// The FBP scheme is available only for sellers from China
+	FBPFilter FBPFilter `json:"fbpFilter,omitempty" default:"all"`
+
+	// Order identifier
+	OrderId int64 `json:"order_id,omitempty"`
+
+	// Specify true to get only MOQ shipments.
+	//
+	// The default value is false, the response contains all shipments
+	IsQuantum bool `json:"is_quantum,omitempty"`
+
+	// Delivery service identifier
+	ProviderId []int64 `json:"provider_id,omitempty"`
+
+	// Start date of the period for which a list of shipments should be generated.
+	//
+	// Format: YYYYY-MM-DDTHH:MM:SSZ.
+	//
+	// Example: 2019-08-24T14:15:22Z
+	Since time.Time `json:"since"`
+
+	// End date of the period for which a list of shipments should be generated.
+	//
+	// Format: YYYYY-MM-DDTHH:MM:SSZ.
+	//
+	// Example: 2019-08-24T14:15:22Z.
+	To time.Time `json:"to"`
+
+	// Shipment status
+	Status string `json:"status,omitempty"`
+
+	// Warehouse identifier
+	WarehouseId []int64 `json:"warehouse_id,omitempty"`
+
+	// Date when shipment status was last changed
+	LastChangedStatusDate *GetFBSShipmentsListV4FilterLastChangeDate `json:"last_changed_status_date,omitempty"`
+}
+
+type GetFBSShipmentsListV4FilterLastChangeDate struct {
+	From time.Time `json:"from"`
+	To   time.Time `json:"to"`
+}
+
+type GetFBSShipmentsListV4With struct {
+	// Add analytics data to the response
+	AnalyticsData bool `json:"analytics_data"`
+
+	// Add the shipment barcodes to the response
+	Barcodes bool `json:"barcodes"`
+
+	// Add financial data to the response
+	FinancialData bool `json:"financial_data"`
+
+	// Transliterate the return values
+	Translit bool `json:"translit"`
+}
+
+type GetFBSShipmentsListV4Response struct {
+	core.CommonResponse
+
+	// Indicates that the response returned not the entire array of shipments:
+	//
+	//   - true — it is necessary to make a new request with a different offset value to get information on the remaining shipments;
+	//   - false — the entire array of shipments for the filter specified in the request was returned in the response
+	HasNext bool `json:"has_next"`
+
+	// Cursor for the next page
+	Cursor string `json:"cursor"`
+
+	// Array of shipments
+	Postings []FBSPosting `json:"postings"`
+}
+
+// Returns a list of shipments for the specified time period using v4 API.
+// The time period shouldn't be longer than one year.
+//
+// You can filter shipments by their status. The list of available statuses is specified in the description of the filter.status parameter.
+//
+// The true value of the has_next parameter in the response means there is not the entire array of shipments in the response. To get information on the remaining shipments, make a new request with a different offset value.
+func (c FBS) GetFBSShipmentsListV4(ctx context.Context, params *GetFBSShipmentsListV4Params) (*GetFBSShipmentsListV4Response, error) {
+	url := "/v4/posting/fbs/list"
+
+	resp := &GetFBSShipmentsListV4Response{}
 
 	response, err := c.client.Request(ctx, http.MethodPost, url, params, resp, nil)
 	if err != nil {
